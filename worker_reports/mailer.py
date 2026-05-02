@@ -40,9 +40,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate
 
-from worker_reports.db_queries import StoreRecord, WeeklyStats
-from worker_reports.logger import get_logger
-from worker_reports.settings import get_settings
+from db_queries import StoreRecord, WeeklyStats
+from logger import get_logger
+from settings import get_settings
 
 logger = get_logger(__name__)
 _settings = get_settings()

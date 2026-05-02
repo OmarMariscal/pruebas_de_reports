@@ -44,8 +44,8 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
-from worker_reports.db_queries import CategoryStats, StoreRecord, WeeklyStats
-from worker_reports.logger import get_logger
+from db_queries import CategoryStats, StoreRecord, WeeklyStats
+from logger import get_logger
 
 logger = get_logger(__name__)
 
