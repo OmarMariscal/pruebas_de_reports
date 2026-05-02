@@ -44,7 +44,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from worker_reports.db.db_queries import (
+from db.db_queries import (
     StoreRecord,
     WeeklyStats,
     compute_category_breakdown,
