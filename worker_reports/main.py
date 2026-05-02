@@ -44,7 +44,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from worker_reports.db_queries import (
+from db_queries import (
     StoreRecord,
     WeeklyStats,
     compute_category_breakdown,
@@ -53,10 +53,10 @@ from worker_reports.db_queries import (
     get_upcoming_predictions,
     verify_connection,
 )
-from worker_reports.logger import get_logger
-from worker_reports.mailer import send_report
-from worker_reports.renderer import render_report_pdf
-from worker_reports.settings import get_settings
+from logger import get_logger
+from mailer import send_report
+from renderer import render_report_pdf
+from settings import get_settings
 
 logger = get_logger(__name__)
 _settings = get_settings()
