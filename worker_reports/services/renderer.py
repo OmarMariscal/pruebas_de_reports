@@ -44,8 +44,10 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
-from db_queries import CategoryStats, StoreRecord, WeeklyStats
-from logger import get_logger
+from db import CategoryStats, StoreRecord, WeeklyStats
+from utils import get_logger
+# para encontrar la carpeta "templates/".
+_BASE_DIR = Path(__file__).parent.parent
 
 logger = get_logger(__name__)
 

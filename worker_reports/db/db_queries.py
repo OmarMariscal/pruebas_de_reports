@@ -32,8 +32,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
-from logger import get_logger
-from settings import get_settings
+from utils import get_logger
+from config import get_settings
 
 logger = get_logger(__name__)
 _settings = get_settings()
