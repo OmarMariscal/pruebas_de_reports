@@ -53,7 +53,7 @@ logger = get_logger(__name__)
 
 # Rutas base del microservicio
 
-_BASE_DIR = Path(__file__).parent
+_BASE_DIR = Path(__file__).parent.parent
 _TEMPLATES_DIR = _BASE_DIR / "templates"
 _STYLES_PATH = _TEMPLATES_DIR / "styles.css"
 _LOGO_PATH = _TEMPLATES_DIR / "assets" / "logo_bananalytics.png"
