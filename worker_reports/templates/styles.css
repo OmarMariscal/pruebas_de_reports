@@ -1,0 +1,533 @@
+/*
+ * BanAnalytics — Reporte Semanal de Predicciones
+ * Hoja de estilos de marca para renderizado PDF via WeasyPrint
+ *
+ * Paleta de colores extraída del cliente local (app.py, dashboard.py):
+ *   Primario oscuro   : #2D2114  (sidebar, títulos principales)
+ *   Acento dorado     : #C38441  (bordes activos, highlights, botones)
+ *   Fondo crema       : #FDF3E7  (fondos de tarjetas, secciones)
+ *   Texto secundario  : #8D7A66  (subtítulos, fechas, etiquetas)
+ *   Borde sutil       : #F0E6D6  (separadores, bordes de tabla)
+ *   Déficit           : #C62828 / #FFEBEE / #EF9A9A
+ *   Superávit         : #1B5E20 / #E8F5E9 / #A5D6A7
+ *   Neutro            : #455A64 / #ECEFF1 / #B0BEC5
+ *
+ * Tipografía:
+ *   Títulos    : Playfair Display (serif elegante)
+ *   Cuerpo     : Lato (sans-serif limpia, excelente legibilidad en impresión)
+ *   Fallbacks  : Georgia / 'DejaVu Sans' para entornos sin red
+ *
+ * Notas WeasyPrint:
+ *   - @page define tamaño A4 y márgenes de impresión.
+ *   - page-break-inside: avoid en tarjetas y filas de tabla críticas.
+ *   - Flexbox es soportado desde WeasyPrint 60+.
+ *   - position:fixed no persiste entre páginas; se usa margin-top para separación.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700;900&display=swap');
+
+/* Página A4 */
+
+@page {
+    size: A4 portrait;
+    margin: 2cm 1.8cm 2.5cm 1.8cm;
+}
+
+@page :first {
+    margin-top: 1.5cm;
+}
+
+/* Reset y base */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    font-family: 'Lato', 'DejaVu Sans', Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #2D2114;
+    background: #FFFFFF;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+/* Encabezado del documento */
+
+.doc-header {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 20pt;
+    border-bottom: 3pt solid #C38441;
+    margin-bottom: 16pt;
+}
+
+.doc-header__brand {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12pt;
+}
+
+.doc-header__logo {
+    width: 52pt;
+    height: 52pt;
+    object-fit: contain;
+}
+
+.doc-header__title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2pt;
+}
+
+.doc-header__product-name {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 20pt;
+    font-weight: 700;
+    color: #2D2114;
+    letter-spacing: -0.3pt;
+    line-height: 1.1;
+}
+
+.doc-header__product-name span {
+    color: #C38441;
+}
+
+.doc-header__report-type {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    color: #8D7A66;
+}
+
+.doc-header__meta {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 3pt;
+}
+
+.doc-header__meta-item {
+    font-size: 8.5pt;
+    color: #8D7A66;
+    line-height: 1.3;
+}
+
+.doc-header__meta-item strong {
+    color: #2D2114;
+    font-weight: 700;
+}
+
+/* Bloque de identidad de tienda */
+
+.store-identity {
+    background: #FDF3E7;
+    border: 1pt solid #F0E6D6;
+    border-left: 4pt solid #C38441;
+    border-radius: 4pt;
+    padding: 12pt 16pt;
+    margin-bottom: 18pt;
+    page-break-inside: avoid;
+}
+
+.store-identity__name {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 16pt;
+    font-weight: 700;
+    color: #2D2114;
+    margin-bottom: 4pt;
+}
+
+.store-identity__details {
+    display: flex;
+    flex-direction: row;
+    gap: 24pt;
+}
+
+.store-identity__detail {
+    font-size: 8.5pt;
+    color: #8D7A66;
+}
+
+.store-identity__detail strong {
+    color: #2D2114;
+    font-weight: 700;
+}
+
+/* KPI Cards */
+
+.kpi-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 10pt;
+    margin-bottom: 22pt;
+    page-break-inside: avoid;
+}
+
+.kpi-card {
+    flex: 1;
+    background: #FFFFFF;
+    border: 1pt solid #F0E6D6;
+    border-radius: 6pt;
+    padding: 12pt 10pt;
+    text-align: center;
+    page-break-inside: avoid;
+}
+
+.kpi-card--total {
+    border-top: 3pt solid #C38441;
+    background: #FDF3E7;
+}
+
+.kpi-card--deficit {
+    border-top: 3pt solid #C62828;
+    background: #FFEBEE;
+}
+
+.kpi-card--superavit {
+    border-top: 3pt solid #1B5E20;
+    background: #E8F5E9;
+}
+
+.kpi-card--featured {
+    border-top: 3pt solid #2D2114;
+    background: #F9F5F0;
+}
+
+.kpi-card__number {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 26pt;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4pt;
+}
+
+.kpi-card--total    .kpi-card__number { color: #C38441; }
+.kpi-card--deficit  .kpi-card__number { color: #C62828; }
+.kpi-card--superavit .kpi-card__number { color: #1B5E20; }
+.kpi-card--featured .kpi-card__number { color: #2D2114; }
+
+.kpi-card__label {
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.8pt;
+    text-transform: uppercase;
+    color: #8D7A66;
+    line-height: 1.3;
+}
+
+/* Divisor de sección */
+
+.section-divider {
+    height: 1pt;
+    background: linear-gradient(to right, #C38441 0%, #F0E6D6 100%);
+    margin: 18pt 0 14pt 0;
+}
+
+/* Encabezados de sección */
+
+.section-heading {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8pt;
+    margin-bottom: 10pt;
+}
+
+.section-heading__title {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 13pt;
+    font-weight: 600;
+    color: #2D2114;
+}
+
+.section-heading__subtitle {
+    font-size: 8pt;
+    color: #8D7A66;
+    font-style: italic;
+}
+
+.section-heading__accent {
+    display: inline-block;
+    width: 20pt;
+    height: 2pt;
+    background: #C38441;
+    vertical-align: middle;
+    margin-right: 6pt;
+}
+
+/* Tablas */
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin-bottom: 18pt;
+}
+
+.report-table thead tr {
+    background: #2D2114;
+    color: #FFFFFF;
+}
+
+.report-table thead th {
+    padding: 7pt 8pt;
+    text-align: left;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.8pt;
+    text-transform: uppercase;
+}
+
+.report-table thead th:first-child {
+    border-radius: 3pt 0 0 0;
+}
+
+.report-table thead th:last-child {
+    border-radius: 0 3pt 0 0;
+    text-align: center;
+}
+
+.report-table tbody tr {
+    border-bottom: 0.5pt solid #F0E6D6;
+    page-break-inside: avoid;
+}
+
+.report-table tbody tr:nth-child(even) {
+    background: #FAFAF8;
+}
+
+.report-table tbody tr:last-child {
+    border-bottom: 1pt solid #C38441;
+}
+
+.report-table td {
+    padding: 6pt 8pt;
+    vertical-align: middle;
+}
+
+.report-table td.col-product {
+    font-weight: 700;
+    color: #2D2114;
+    max-width: 130pt;
+}
+
+.report-table td.col-category {
+    color: #8D7A66;
+    font-style: italic;
+    font-size: 8pt;
+}
+
+.report-table td.col-barcode {
+    font-size: 7.5pt;
+    color: #8D7A66;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.report-table td.col-date {
+    color: #8D7A66;
+    font-size: 8pt;
+    white-space: nowrap;
+}
+
+.report-table td.col-number {
+    text-align: right;
+    font-weight: 700;
+    font-size: 10pt;
+    color: #2D2114;
+}
+
+.report-table td.col-deviation {
+    text-align: right;
+    font-weight: 700;
+    font-size: 9pt;
+}
+
+.col-deviation--positive { color: #1B5E20; }
+.col-deviation--negative { color: #C62828; }
+.col-deviation--neutral  { color: #455A64; }
+
+.report-table td.col-badge {
+    text-align: center;
+}
+
+.report-table td.col-units {
+    text-align: right;
+    font-size: 8pt;
+    color: #8D7A66;
+}
+
+/* Badges de clasificación */
+
+.badge {
+    display: inline-block;
+    padding: 2.5pt 7pt;
+    border-radius: 10pt;
+    font-size: 7pt;
+    font-weight: 900;
+    letter-spacing: 0.5pt;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.badge--deficit {
+    background: #FFEBEE;
+    color: #C62828;
+    border: 0.5pt solid #EF9A9A;
+}
+
+.badge--superavit {
+    background: #E8F5E9;
+    color: #1B5E20;
+    border: 0.5pt solid #A5D6A7;
+}
+
+.badge--none {
+    background: #ECEFF1;
+    color: #455A64;
+    border: 0.5pt solid #B0BEC5;
+}
+
+/* Tabla de resumen por categoría */
+
+.category-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin-bottom: 18pt;
+}
+
+.category-table thead tr {
+    background: #FDF3E7;
+    border-bottom: 1.5pt solid #C38441;
+}
+
+.category-table thead th {
+    padding: 7pt 10pt;
+    text-align: left;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.8pt;
+    text-transform: uppercase;
+    color: #8D7A66;
+}
+
+.category-table thead th.col-num {
+    text-align: center;
+}
+
+.category-table tbody tr {
+    border-bottom: 0.5pt solid #F0E6D6;
+    page-break-inside: avoid;
+}
+
+.category-table tbody tr:nth-child(even) {
+    background: #FDFBF9;
+}
+
+.category-table td {
+    padding: 6pt 10pt;
+    vertical-align: middle;
+}
+
+.category-table td.col-name {
+    font-weight: 700;
+    color: #2D2114;
+}
+
+.category-table td.col-num {
+    text-align: center;
+    font-weight: 700;
+}
+
+.category-table td.col-deficit  { text-align: center; color: #C62828; font-weight: 700; }
+.category-table td.col-superavit { text-align: center; color: #1B5E20; font-weight: 700; }
+.category-table td.col-neutral  { text-align: center; color: #455A64; }
+.category-table td.col-featured { text-align: center; color: #C38441; font-weight: 700; }
+
+/* Indicador de barra de proporción */
+
+.proportion-bar {
+    display: flex;
+    flex-direction: row;
+    height: 5pt;
+    border-radius: 3pt;
+    overflow: hidden;
+    margin-top: 2pt;
+    background: #ECEFF1;
+    min-width: 40pt;
+}
+
+.proportion-bar__deficit   { background: #EF9A9A; }
+.proportion-bar__superavit { background: #A5D6A7; }
+.proportion-bar__neutral   { background: #CFD8DC; }
+
+/* Aviso de sin datos */
+
+.empty-state {
+    text-align: center;
+    padding: 20pt 10pt;
+    color: #8D7A66;
+    font-style: italic;
+    font-size: 9pt;
+    border: 1pt dashed #F0E6D6;
+    border-radius: 4pt;
+    background: #FDFBF9;
+    margin-bottom: 14pt;
+}
+
+/* Pie de página */
+
+.doc-footer {
+    margin-top: 24pt;
+    padding-top: 10pt;
+    border-top: 1pt solid #F0E6D6;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    page-break-inside: avoid;
+}
+
+.doc-footer__brand {
+    font-size: 7.5pt;
+    color: #8D7A66;
+}
+
+.doc-footer__brand strong {
+    color: #C38441;
+}
+
+.doc-footer__disclaimer {
+    font-size: 7pt;
+    color: #B0BEC5;
+    text-align: right;
+    max-width: 220pt;
+    line-height: 1.4;
+}
+
+/* Saltos de página */
+
+.page-break {
+    page-break-before: always;
+}
+
+.no-page-break {
+    page-break-inside: avoid;
+}
+
+/* Utilidades de espaciado */
+
+.mt-4  { margin-top:  4pt; }
+.mt-8  { margin-top:  8pt; }
+.mt-14 { margin-top: 14pt; }
+.mb-4  { margin-bottom:  4pt; }
+.mb-8  { margin-bottom:  8pt; }
+.mb-14 { margin-bottom: 14pt; }

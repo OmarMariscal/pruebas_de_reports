@@ -1,0 +1,44 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+# Archivos temporales y caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.cache*
+
+# Variables de entorno y contraseñas
+.env
+.env.*
+
+# Bases de datos locales
+*.sqlite3
+*.db
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Modelos de Machine Learning y Datasets (worker_ml)
+*.pkl
+*.csv
+*.parquet
+
+# Empaquetado y compilación de Flet (cliente_local)
+build/
+dist/
+*.spec
+
+# Configuraciones de Editores de Código (VS Code / PyCharm)
+.vscode/
+.idea/
+
+# Archivo cola de paquetes
+missing-items.txt
+
+#Carpetas y Archivos de Prueba
+pruebas/

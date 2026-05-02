@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reporte Semanal BanAnalytics — {{ store.owner_name }}</title>
+    <style>
+        {{ css | safe }}
+    </style>
+</head>
+<body>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   ENCABEZADO DEL DOCUMENTO
+   Contiene: logotipo, nombre del producto, tipo de reporte y metadatos.
+═══════════════════════════════════════════════════════════════════════════ #}
+<header class="doc-header">
+    <div class="doc-header__brand">
+        <img
+            class="doc-header__logo"
+            src="data:image/png;base64,{{ logo_b64 }}"
+            alt="BanAnalytics"
+        />
+        <div class="doc-header__title-group">
+            <div class="doc-header__product-name">
+                Ban<span>Analytics</span>
+            </div>
+            <div class="doc-header__report-type">
+                Reporte Predictivo Semanal
+            </div>
+        </div>
+    </div>
+
+    <div class="doc-header__meta">
+        <div class="doc-header__meta-item">
+            <strong>Período analizado</strong><br />
+            {{ stats.date_range_start.strftime("%d/%m/%Y") }}
+            al
+            {{ stats.date_range_end.strftime("%d/%m/%Y") }}
+        </div>
+        <div class="doc-header__meta-item">
+            <strong>Generado el</strong><br />
+            {{ generated_at }}
+        </div>
+        <div class="doc-header__meta-item">
+            <strong>Desarrollado por</strong><br />
+            MonkeyCode — Ing. de Software
+        </div>
+    </div>
+</header>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   IDENTIDAD DE LA TIENDA
+   Muestra quién es el destinatario del reporte y dónde opera.
+═══════════════════════════════════════════════════════════════════════════ #}
+<section class="store-identity no-page-break">
+    <div class="store-identity__name">{{ store.owner_name }}</div>
+    <div class="store-identity__details">
+        <div class="store-identity__detail">
+            <strong>Ciudad:</strong> {{ store.city }}
+        </div>
+        <div class="store-identity__detail">
+            <strong>ID de tienda:</strong> {{ store.store_id }}
+        </div>
+        <div class="store-identity__detail">
+            <strong>Correo:</strong> {{ store.email }}
+        </div>
+        <div class="store-identity__detail">
+            <strong>Productos analizados:</strong> {{ stats.unique_products }}
+        </div>
+    </div>
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   TARJETAS DE INDICADORES CLAVE (KPIs)
+   Cuatro métricas de alto nivel que el tendero puede asimilar en segundos.
+═══════════════════════════════════════════════════════════════════════════ #}
+<section class="kpi-grid no-page-break">
+
+    <div class="kpi-card kpi-card--total">
+        <div class="kpi-card__number">{{ stats.unique_products }}</div>
+        <div class="kpi-card__label">Productos<br />analizados</div>
+    </div>
+
+    <div class="kpi-card kpi-card--deficit">
+        <div class="kpi-card__number">{{ stats.deficit_products }}</div>
+        <div class="kpi-card__label">Productos en<br />Déficit</div>
+    </div>
+
+    <div class="kpi-card kpi-card--superavit">
+        <div class="kpi-card__number">{{ stats.superavit_products }}</div>
+        <div class="kpi-card__label">Productos en<br />Superávit</div>
+    </div>
+
+    <div class="kpi-card kpi-card--featured">
+        <div class="kpi-card__number">{{ stats.unique_featured_products }}</div>
+        <div class="kpi-card__label">Alertas<br />prioritarias</div>
+    </div>
+
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   SECCIÓN 1: ALERTAS PRIORITARIAS
+   Productos con feature=True ordenados por magnitud de desviación.
+   Son los que el tendero debe atender primero al hacer su pedido.
+═══════════════════════════════════════════════════════════════════════════ #}
+<div class="section-divider"></div>
+
+<section class="no-page-break">
+    <div class="section-heading">
+        <span class="section-heading__accent"></span>
+        <span class="section-heading__title">Alertas Prioritarias</span>
+        <span class="section-heading__subtitle">
+            Productos con mayor desviación respecto al promedio histórico —
+            requieren atención inmediata en el próximo pedido
+        </span>
+    </div>
+
+    {% if stats.featured_rows_list %}
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Cód. barras</th>
+                    <th>Fecha objetivo</th>
+                    <th style="text-align:right;">Unid. predichas</th>
+                    <th style="text-align:right;">Desviación</th>
+                    <th style="text-align:center;">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in stats.featured_rows_list %}
+                <tr>
+                    <td class="col-product">{{ row.product_name }}</td>
+                    <td class="col-category">{{ row.category }}</td>
+                    <td class="col-barcode">{{ row.barcode }}</td>
+                    <td class="col-date">
+                        {{ row.objective_date.strftime("%d/%m/%Y") }}
+                    </td>
+                    <td class="col-number">{{ row.prediction }}</td>
+                    <td class="col-deviation
+                        {% if row.percentage_average_deviation > 0 %}col-deviation--positive
+                        {% elif row.percentage_average_deviation < 0 %}col-deviation--negative
+                        {% else %}col-deviation--neutral{% endif %}">
+                        {% if row.percentage_average_deviation > 0 %}+{% endif %}{{ "%.1f"|format(row.percentage_average_deviation) }}%
+                    </td>
+                    <td class="col-badge">
+                        {% if row.prediction_type == "deficit" %}
+                            <span class="badge badge--deficit">Déficit</span>
+                        {% elif row.prediction_type == "superavit" %}
+                            <span class="badge badge--superavit">Superávit</span>
+                        {% else %}
+                            <span class="badge badge--none">Estable</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="empty-state">
+            ✅ No se detectaron alertas prioritarias para este período.
+            Todos los productos están dentro de los umbrales de tolerancia.
+        </div>
+    {% endif %}
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   SECCIÓN 2: RESUMEN COMPLETO DE PREDICCIONES
+   Una fila por producto (peor caso de la semana). Tabla detallada.
+═══════════════════════════════════════════════════════════════════════════ #}
+<div class="section-divider"></div>
+
+<section>
+    <div class="section-heading">
+        <span class="section-heading__accent"></span>
+        <span class="section-heading__title">Resumen Completo de Predicciones</span>
+        <span class="section-heading__subtitle">
+            Un producto por fila — se muestra el día de mayor desviación
+            como referencia del riesgo máximo de la semana
+        </span>
+    </div>
+
+    {% if stats.summary_rows %}
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th>Fecha ref.</th>
+                    <th style="text-align:right;">Pred. (unid.)</th>
+                    <th style="text-align:right;">Desviación</th>
+                    <th style="text-align:center;">Clasificación</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in stats.summary_rows %}
+                <tr>
+                    <td style="color:#8D7A66; font-size:7.5pt;">
+                        {{ loop.index }}
+                    </td>
+                    <td class="col-product">
+                        {{ row.product_name }}
+                        {% if row.feature %}
+                            <span style="color:#C38441; font-size:7pt; font-weight:900;">
+                                ★
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="col-category">{{ row.category }}</td>
+                    <td class="col-date">
+                        {{ row.objective_date.strftime("%d/%m/%Y") }}
+                    </td>
+                    <td class="col-number">{{ row.prediction }}</td>
+                    <td class="col-deviation
+                        {% if row.percentage_average_deviation > 0 %}col-deviation--positive
+                        {% elif row.percentage_average_deviation < 0 %}col-deviation--negative
+                        {% else %}col-deviation--neutral{% endif %}">
+                        {% if row.percentage_average_deviation > 0 %}+{% endif %}{{ "%.1f"|format(row.percentage_average_deviation) }}%
+                    </td>
+                    <td class="col-badge">
+                        {% if row.prediction_type == "deficit" %}
+                            <span class="badge badge--deficit">Déficit</span>
+                        {% elif row.prediction_type == "superavit" %}
+                            <span class="badge badge--superavit">Superávit</span>
+                        {% else %}
+                            <span class="badge badge--none">Estable</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="mt-4 mb-8" style="font-size:7.5pt; color:#8D7A66; text-align:right;">
+            ★ = Producto marcado como Alerta Prioritaria por el modelo predictivo
+        </div>
+    {% else %}
+        <div class="empty-state">
+            No hay predicciones disponibles para el período seleccionado.
+            Verifique que el worker ML se haya ejecutado correctamente.
+        </div>
+    {% endif %}
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   SECCIÓN 3: ANÁLISIS POR CATEGORÍA
+   Breakdown de predicciones agrupadas por categoría de producto.
+   Permite al tendero ver qué segmentos de su tienda están en riesgo.
+═══════════════════════════════════════════════════════════════════════════ #}
+{% if category_breakdown %}
+<div class="section-divider page-break"></div>
+
+<section>
+    <div class="section-heading">
+        <span class="section-heading__accent"></span>
+        <span class="section-heading__title">Análisis por Categoría</span>
+        <span class="section-heading__subtitle">
+            Distribución de estados predictivos por segmento de producto
+        </span>
+    </div>
+
+    <table class="category-table">
+        <thead>
+            <tr>
+                <th>Categoría</th>
+                <th class="col-num">Total</th>
+                <th class="col-num" style="color:#C62828;">Déficit</th>
+                <th class="col-num" style="color:#1B5E20;">Superávit</th>
+                <th class="col-num" style="color:#455A64;">Estable</th>
+                <th class="col-num" style="color:#C38441;">Alertas ★</th>
+                <th>Distribución</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat in category_breakdown %}
+            <tr>
+                <td class="col-name">{{ cat.category }}</td>
+                <td class="col-num">{{ cat.total_products }}</td>
+                <td class="col-deficit">
+                    {% if cat.deficit_count > 0 %}{{ cat.deficit_count }}{% else %}—{% endif %}
+                </td>
+                <td class="col-superavit">
+                    {% if cat.superavit_count > 0 %}{{ cat.superavit_count }}{% else %}—{% endif %}
+                </td>
+                <td class="col-neutral">
+                    {% if cat.neutral_count > 0 %}{{ cat.neutral_count }}{% else %}—{% endif %}
+                </td>
+                <td class="col-featured">
+                    {% if cat.featured_count > 0 %}{{ cat.featured_count }}{% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if cat.total_products > 0 %}
+                    <div class="proportion-bar">
+                        <div
+                            class="proportion-bar__deficit"
+                            style="width:{{ ((cat.deficit_count / cat.total_products) * 100) | round | int }}%;"
+                        ></div>
+                        <div
+                            class="proportion-bar__superavit"
+                            style="width:{{ ((cat.superavit_count / cat.total_products) * 100) | round | int }}%;"
+                        ></div>
+                        <div
+                            class="proportion-bar__neutral"
+                            style="width:{{ ((cat.neutral_count / cat.total_products) * 100) | round | int }}%;"
+                        ></div>
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   SECCIÓN 4: GLOSARIO DE TÉRMINOS
+   Explicación breve de los conceptos clave para el tendero no técnico.
+   Fundamental dado que el usuario objetivo tiene perfil técnico básico (ERS §2.3).
+═══════════════════════════════════════════════════════════════════════════ #}
+<div class="section-divider"></div>
+
+<section class="no-page-break">
+    <div class="section-heading">
+        <span class="section-heading__accent"></span>
+        <span class="section-heading__title">¿Cómo leer este reporte?</span>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; font-size:8pt;">
+        <tbody>
+            <tr>
+                <td style="padding:5pt 8pt; vertical-align:top; width:110pt;">
+                    <span class="badge badge--deficit">Déficit</span>
+                </td>
+                <td style="padding:5pt 8pt; color:#2D2114; border-bottom:0.5pt solid #F0E6D6;">
+                    El modelo predice que las ventas de este producto
+                    <strong>bajarán más de lo normal</strong>.
+                    Considere reducir su pedido o buscar un precio de oferta para agotar existencias.
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:5pt 8pt; vertical-align:top;">
+                    <span class="badge badge--superavit">Superávit</span>
+                </td>
+                <td style="padding:5pt 8pt; color:#2D2114; border-bottom:0.5pt solid #F0E6D6;">
+                    El modelo predice que las ventas
+                    <strong>subirán más de lo habitual</strong>.
+                    Asegúrese de tener suficiente inventario para no quedarse sin existencias.
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:5pt 8pt; vertical-align:top;">
+                    <span class="badge badge--none">Estable</span>
+                </td>
+                <td style="padding:5pt 8pt; color:#2D2114; border-bottom:0.5pt solid #F0E6D6;">
+                    Las ventas se esperan <strong>dentro del rango habitual</strong>.
+                    Mantenga su pedido estándar.
+                </td>
+            </tr>
+            <tr>
+                <td style="padding:5pt 8pt; vertical-align:top;">
+                    <span style="color:#C38441; font-size:10pt; font-weight:900;">★</span>
+                    <span style="font-size:8pt; font-weight:700; color:#C38441;">
+                        Alerta Prioritaria
+                    </span>
+                </td>
+                <td style="padding:5pt 8pt; color:#2D2114;">
+                    El producto presenta una <strong>desviación significativa</strong>
+                    respecto a su promedio de ventas mensual.
+                    Son los productos que más impacto tendrán en sus ganancias
+                    si no se toma acción.
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   PIE DE PÁGINA
+═══════════════════════════════════════════════════════════════════════════ #}
+<footer class="doc-footer">
+    <div class="doc-footer__brand">
+        <strong>BanAnalytics</strong> · Desarrollado por MonkeyCode<br />
+        <span style="color:#B0BEC5;">Universidad de Guadalajara · Ingeniería de Software</span>
+    </div>
+    <div class="doc-footer__disclaimer">
+        Este reporte es generado automáticamente mediante modelos de inteligencia
+        artificial predictiva. Los valores son estimaciones y no garantías de
+        ventas futuras. Generado el {{ generated_at }}.
+    </div>
+</footer>
+
+</body>
+</html>

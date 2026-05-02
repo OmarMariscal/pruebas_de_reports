@@ -1,0 +1,38 @@
+# worker_reports/requirements.txt
+# BanAnalytics — Microservicio de Reportes Semanales
+#
+# Dependencias con versiones fijadas para reproducibilidad total entre
+# ejecuciones de GitHub Actions. Todas las versiones han sido verificadas
+# como compatibles entre sí al momento de escritura.
+#
+# Categorías:
+#   [DB]      Conexión y ORM para Neon (PostgreSQL serverless)
+#   [RENDER]  Renderizado HTML → PDF con soporte completo de CSS
+#   [TEMPLATE] Motor de templates Jinja2
+#   [CONFIG]  Gestión de configuración con validación de tipos
+#   [UTIL]    Utilidades de soporte
+
+# ── [DB] Base de datos ────────────────────────────────────────────────────────
+SQLAlchemy==2.0.49          # ORM y motor de conexión SQL (misma versión que worker_ml)
+psycopg2-binary==2.9.11    # Driver PostgreSQL para Python (binario: sin compilación)
+
+# ── [RENDER] Conversión HTML → PDF ───────────────────────────────────────────
+# WeasyPrint transforma HTML+CSS a PDF de alta fidelidad.
+# Requiere dependencias del sistema instaladas en el runner (ver weekly_report.yml):
+#   libpango-1.0-0, libpangoft2-1.0-0, libgdk-pixbuf2.0-0, libffi-dev
+weasyprint==62.3            # Motor de renderizado PDF desde HTML/CSS
+pydyf<0.11.0
+
+# ── [TEMPLATE] Motor de templates ────────────────────────────────────────────
+Jinja2==3.1.6               # Motor de templates HTML para el reporte
+
+# ── [CONFIG] Configuración y validación ──────────────────────────────────────
+pydantic==2.12.5            # Validación de tipos y datos (misma versión que api_gateway)
+pydantic-settings==2.13.1  # Extensión de Pydantic para variables de entorno
+python-dotenv==1.2.2        # Lectura de archivos .env para desarrollo local
+
+# ── Dependencias transitivas relevantes (fijadas para reproducibilidad) ───────
+greenlet==3.3.2             # Requerido por SQLAlchemy para operaciones async
+MarkupSafe==3.0.2           # Requerido por Jinja2 para escape seguro de HTML
+typing_extensions==4.15.0  # Requerido por Pydantic
+
