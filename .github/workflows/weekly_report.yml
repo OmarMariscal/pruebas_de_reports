@@ -1,0 +1,190 @@
+#  BanAnalytics — Worker Reports · GitHub Actions
+#
+#  Microservicio de Reportes Semanales (RF-08)
+#  ─────────────────────────
+#  Ejecuta el pipeline completo de generación y envío de reportes PDF:
+#    1. Conecta a Neon y consulta predicciones de los próximos 7 días.
+#    2. Por cada tienda registrada: genera un PDF personalizado con Jinja2
+#       + WeasyPrint y lo envía por correo al propietario vía SMTP.
+#
+#  Programación CRON:
+#    Domingos a las 05:00 AM CST (UTC-6, horario estándar de México).
+#    Equivalente: 11:00 UTC.
+#
+#  Ventana de seguridad respecto al Worker ML:
+#    ml_pipeline.yml corre a las 03:00 AM CST (09:00 UTC) y tiene un
+#    timeout máximo de 180 minutos (hasta las 06:00 AM CST / 12:00 UTC).
+#    Este worker se ejecuta a las 05:00 AM CST (11:00 UTC), garantizando
+#    que el Worker ML habrá terminado y las predicciones ya estarán en Neon
+#    antes de que comience la generación de reportes.
+#
+#  Dependencias de sistema requeridas por WeasyPrint:
+#    libpango-1.0-0, libpangoft2-1.0-0, libgdk-pixbuf2.0-0,
+#    libffi-dev, shared-mime-info
+#    Se instalan explícitamente antes de pip install para evitar errores
+#    de importación de WeasyPrint en el runner ubuntu-latest.
+#
+#  Secrets de GitHub Actions requeridos (Settings → Secrets → Actions):
+#    DATABASE_URL   : Cadena de conexión PostgreSQL para Neon.
+#    SMTP_HOST      : Hostname del servidor SMTP (ej: smtp.gmail.com).
+#    SMTP_PORT      : Puerto SMTP (587 para STARTTLS, 465 para SSL).
+#    SMTP_USER      : Usuario de autenticación SMTP.
+#    SMTP_PASSWORD  : Contraseña de autenticación SMTP.
+#
+#  Variables de GitHub Actions (Settings → Variables → Actions):
+#    SMTP_FROM      : Dirección De: (default: reportes@bananalytics.com)
+#    SMTP_FROM_NAME : Nombre remitente (default: BanAnalytics Reportes)
+#    SMTP_USE_TLS   : true/false según el puerto (default: true)
+#    REPORT_DAYS    : Días de horizonte predictivo (default: 7)
+#    MAX_FEATURED   : Máx. alertas prioritarias en el reporte (default: 10)
+#
+#  Política de fallos:
+#    A diferencia del Worker ML, este worker NO implementa reintentos
+#    automáticos con sleep, ya que un fallo de SMTP parcial (una tienda)
+#    no justifica retrasar el envío de todas las demás. El orquestador
+#    (main.py) loguea cada fallo individual y continúa con las siguientes
+#    tiendas. GitHub Actions notifica por email si sys.exit(1) es invocado
+#    (todos los envíos fallaron o error crítico de BD).
+
+name: Worker Reports — BanAnalytics
+
+on:
+  schedule:
+    # ┌──────── Minuto (0)
+    # │ ┌────── Hora en UTC (11 = 05:00 AM CST / UTC-6)
+    # │ │ ┌──── Día del mes (* = cualquiera)
+    # │ │ │ ┌── Mes (* = cualquiera)
+    # │ │ │ │ ┌ Día de la semana (0 = domingo)
+    # │ │ │ │ │
+    # 0 11 * * 0
+    - cron: "0 11 * * 0"
+
+  # Disparo manual desde GitHub Actions → pestaña "Actions" → "Run workflow"
+  # Útil para: pruebas en desarrollo, reenvío de reportes fallidos, demos.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >
+          Modo prueba: genera los PDFs pero NO envía correos.
+          (true = solo generar, false = generar y enviar)
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  generate-and-send-reports:
+    name: Generar y Enviar Reportes Semanales
+    runs-on: ubuntu-latest
+
+    # Timeout conservador: 60 minutos es más que suficiente para generar y
+    # enviar reportes a cientos de tiendas. El cuello de botella es WeasyPrint
+    # (~2-5 seg/PDF) y el tiempo de red SMTP (~1-3 seg/correo).
+    timeout-minutes: 60
+
+    defaults:
+      run:
+        working-directory: ./worker_reports
+
+    steps:
+      #  1. Checkout del repositorio
+      - name: 📥 Checkout del repositorio
+        uses: actions/checkout@v4
+
+      #  2. Dependencias del sistema para WeasyPrint 
+      # WeasyPrint no es una librería Python pura: depende de libpango para el
+      # renderizado de texto y libgdk-pixbuf para el manejo de imágenes.
+      # Sin este step, WeasyPrint falla en la importación con:
+      #   "OSError: cannot load library 'libpango-1.0.so.0'"
+      - name: 📦 Instalar dependencias del sistema (WeasyPrint)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0 \
+            libgdk-pixbuf2.0-0 \
+            libffi-dev \
+            shared-mime-info \
+            fonts-liberation \
+            fonts-dejavu-core
+        # fonts-liberation y fonts-dejavu-core garantizan que WeasyPrint tenga
+        # fuentes del sistema disponibles como fallback si Google Fonts no carga.
+
+      #  3. Configurar Python 3.11 
+      - name: 🐍 Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: worker_reports/requirements.txt
+
+      #  4. Instalar dependencias Python 
+      - name: 📦 Instalar dependencias Python
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      #  5. Verificar instalación de WeasyPrint 
+      # Step de diagnóstico temprano: si WeasyPrint no puede importarse correctamente
+      # (falta de dependencias del sistema), este step fallará con un mensaje claro
+      # antes de intentar el pipeline principal.
+      - name: 🔍 Verificar instalación de WeasyPrint
+        run: |
+          python -c "
+          import weasyprint
+          print(f'✅ WeasyPrint {weasyprint.__version__} importado correctamente.')
+          from weasyprint import HTML
+          print('✅ Renderizador HTML disponible.')
+          "
+
+      #  6. Ejecutar Worker Reports 
+      - name: 📊 Ejecutar Worker Reports
+        env:
+          #  Secrets de base de datos
+          DATABASE_URL:    ${{ secrets.DATABASE_URL }}
+
+          #  Secrets SMTP 
+          SMTP_HOST:       ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:       ${{ secrets.SMTP_PORT }}
+          SMTP_USER:       ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD:   ${{ secrets.SMTP_PASSWORD }}
+
+          # Variables de configuración (con defaults sensatos)
+          SMTP_FROM:       ${{ vars.SMTP_FROM      || 'reportes@bananalytics.com' }}
+          SMTP_FROM_NAME:  ${{ vars.SMTP_FROM_NAME || 'BanAnalytics Reportes' }}
+          SMTP_USE_TLS:    ${{ vars.SMTP_USE_TLS   || 'true' }}
+          REPORT_DAYS:     ${{ vars.REPORT_DAYS    || '7' }}
+          MAX_FEATURED:    ${{ vars.MAX_FEATURED   || '10' }}
+
+          #  Modo prueba (workflow_dispatch únicamente) 
+          # DRY_RUN=true hace que main.py genere los PDFs pero no llame a mailer.py.
+          # Implementación: main.py lee esta variable y la pasa a send_report().
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: python main.py
+
+      # 7. Resumen del run 
+      # Se ejecuta siempre (incluso si el step anterior falla) para proveer
+      # contexto en los logs de GitHub Actions.
+      - name: 📋 Resumen del run
+        if: always()
+        run: |
+          echo "════════════════════════════════════════════════"
+          echo "  BanAnalytics — Worker Reports"
+          echo "  Run    : ${{ github.run_number }}"
+          echo "  Trigger: ${{ github.event_name }}"
+          echo "  Fecha  : $(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo "  Estado : ${{ job.status }}"
+          echo "  Dry Run: ${{ github.event.inputs.dry_run || 'false' }}"
+          echo "════════════════════════════════════════════════"
+
+# 8. Guardar PDFs generados como Artefactos
+      # Se ejecuta desde la raíz del repo, por eso especificamos la carpeta
+      - name: 💾 Guardar reportes PDF para revisión
+        uses: actions/upload-artifact@v4
+        if: always() # Queremos que los guarde incluso si el envío de correo falla
+        with:
+          name: reportes-bananalytics-run-${{ github.run_number }}
+          path: worker_reports/*.pdf 
+          retention-days: 5
