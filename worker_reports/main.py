@@ -5,6 +5,7 @@ Punto de entrada único del microservicio. Implementa el pipeline completo
 del RF-08 (Generación y Emisión Automática de Reporte Semanal):
 
     1.  Verificación de conexión a Neon (fail-fast).
+    1.5 Creación idempotente de reports_database si no existe (DDL seguro).
     2.  Lectura del modo de ejecución (DRY_RUN desde variable de entorno).
     3.  Obtención de todas las tiendas activas con email registrado.
     4.  Por cada tienda:
@@ -13,6 +14,9 @@ del RF-08 (Generación y Emisión Automática de Reporte Semanal):
         c. Cálculo de métricas agregadas (WeeklyStats).
         d. Cálculo de breakdown por categoría (CategoryStats).
         e. Renderizado HTML → PDF en memoria (renderer.py).
+        e2.Persistencia del PDF en Neon (reports_database) — omitido en DRY_RUN.
+           Incluye limpieza automática de reportes fuera de la ventana de
+           retención (~3 meses / 13 reportes por tienda) en la misma transacción.
         f. Envío del correo con PDF adjunto (mailer.py) — omitido en DRY_RUN.
         g. Registro del resultado (éxito/fallo) por tienda.
     5.  Resumen final del run con conteos de éxito/fallo.
@@ -22,9 +26,9 @@ del RF-08 (Generación y Emisión Automática de Reporte Semanal):
 Modo DRY_RUN (variable de entorno DRY_RUN=true):
     Activado mediante el input `dry_run` del workflow_dispatch en el YAML.
     En este modo el pipeline completo se ejecuta (consulta BD, agrega stats,
-    renderiza PDF) pero el paso de envío SMTP se omite. Útil para validar
-    el sistema en desarrollo, probar templates y verificar que las consultas
-    a Neon devuelven datos correctos sin enviar correos reales a los tenderos.
+    renderiza PDF) pero los pasos E2 (persistencia en Neon) y F (envío SMTP)
+    se omiten. Esto garantiza que DRY_RUN sea completamente no destructivo:
+    ni genera datos de prueba en la BD de producción ni envía correos reales.
 
 Manejo de errores por tienda:
     Cada tienda se procesa en su propio bloque try/except. Un fallo en la
@@ -32,10 +36,15 @@ Manejo de errores por tienda:
     de resiliencia operativa del ERS (RF-08 §3) se implementa aquí: el
     sistema registra el fallo, continúa y genera el resumen al final.
 
+    Un fallo en el paso E2 (persistencia en Neon) NO impide el paso F
+    (envío de correo). El tendero recibe su reporte por correo aunque la
+    persistencia en BD haya fallado. Ambos pasos se registran de forma
+    independiente en el resumen del run.
+
 Código de salida:
     0 → al menos una tienda procesada exitosamente (GitHub Actions: verde).
     1 → error crítico irrecuperable (sin conexión a BD, sin tiendas activas,
-        todos los envíos fallaron). GitHub Actions notifica por email.
+        todos los reportes fallaron). GitHub Actions notifica por email.
 """
 
 from __future__ import annotations
@@ -44,32 +53,27 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from db.db_queries import (
+from db_queries import (
+    ReportRecord,
     StoreRecord,
     WeeklyStats,
     compute_category_breakdown,
     compute_weekly_stats,
+    ensure_reports_table_exists,
     get_all_active_stores,
     get_upcoming_predictions,
+    save_report,
     verify_connection,
 )
-from config import get_settings
-from db import (
-    StoreRecord,
-    WeeklyStats,
-    compute_category_breakdown,
-    compute_weekly_stats,
-    get_all_active_stores,
-    get_upcoming_predictions,
-    verify_connection,
-)
-from services import render_report_pdf, send_report
-from utils import get_logger
+from logger import get_logger
+from mailer import send_report
+from renderer import render_report_pdf
+from settings import get_settings
 
 logger = get_logger(__name__)
 _settings = get_settings()
 
-# Separador visual para los logs de GitHub Actions
+# ── Separador visual para los logs de GitHub Actions ─────────────────────────
 
 _SEP = "═" * 68
 
@@ -109,24 +113,31 @@ def _process_store(
     dry_run: bool,
 ) -> bool:
     """
-    Ejecuta el pipeline completo (consultar → agregar → renderizar → enviar)
-    para una tienda individual.
+    Ejecuta el pipeline completo por tienda:
+    consultar → agregar → renderizar → persistir → enviar.
 
     El aislamiento de cada tienda en su propia función garantiza que cualquier
     excepción no capturada sea contenida y no afecte al resto del pipeline.
+    Los pasos E2 (persistencia en Neon) y F (envío SMTP) son independientes
+    entre sí: un fallo en E2 no bloquea F, garantizando que el tendero recibe
+    su reporte por correo aunque la escritura en BD haya encontrado un error.
 
     Args:
         store:        Datos de la tienda a procesar.
         generated_at: Timestamp formateado de inicio del run.
-        dry_run:      Si True, omite el envío SMTP y loguea el resultado simulado.
+        dry_run:      Si True, omite E2 (persistencia en Neon) y F (envío SMTP).
+                      El pipeline de generación del PDF (pasos A–E) se ejecuta
+                      siempre para validar el sistema completo en pruebas.
 
     Returns:
-        True si el reporte fue generado (y enviado correctamente en modo normal).
-        False si ocurrió algún error en cualquier paso del pipeline.
+        True  si el PDF fue generado Y (persistido en Neon O enviado por correo).
+              Un fallo de persistencia que no impide el envío no devuelve False.
+        False si el PDF no pudo generarse, o si tanto la persistencia como el
+              envío de correo fallaron simultáneamente.
     """
     store_label = f"Tienda {store.store_id} ({store.owner_name}, {store.city})"
 
-    # Paso A: Consultar predicciones
+    # ── Paso A: Consultar predicciones ────────────────────────────────────────
     try:
         predictions = get_upcoming_predictions(
             store_id=store.store_id,
@@ -136,7 +147,7 @@ def _process_store(
         logger.error(f"  ❌ {store_label}: Error al consultar predicciones: {exc}")
         return False
 
-    # Paso B: Validar datos mínimos
+    # ── Paso B: Validar datos mínimos ─────────────────────────────────────────
     if not predictions:
         logger.warning(
             f"  ⚠️  {store_label}: Sin predicciones disponibles para los "
@@ -146,7 +157,7 @@ def _process_store(
         )
         return False
 
-    # Paso C: Calcular métricas agregadas
+    # ── Paso C: Calcular métricas agregadas ───────────────────────────────────
     try:
         stats: WeeklyStats = compute_weekly_stats(
             predictions=predictions,
@@ -156,7 +167,7 @@ def _process_store(
         logger.error(f"  ❌ {store_label}: Error al calcular estadísticas: {exc}")
         return False
 
-    # Paso D: Calcular breakdown por categoría
+    # ── Paso D: Calcular breakdown por categoría ──────────────────────────────
     try:
         category_breakdown = compute_category_breakdown(predictions)
     except Exception as exc:
@@ -165,7 +176,7 @@ def _process_store(
         )
         return False
 
-    # Paso E: Renderizar PDF en memoria
+    # ── Paso E: Renderizar PDF en memoria ─────────────────────────────────────
     try:
         pdf_bytes = render_report_pdf(
             store=store,
@@ -184,12 +195,43 @@ def _process_store(
         logger.error(f"  ❌ {store_label}: Error al renderizar PDF: {exc}")
         return False
 
-    # Paso F: Enviar correo (o simular en DRY_RUN)
+    # ── Paso E2: Persistir PDF en Neon (omitido en DRY_RUN) ─────────────────────
+    # Este paso es independiente del paso F (envío SMTP): un fallo aquí
+    # no impide el envío del correo. El tendero recibe su reporte aunque
+    # la escritura en BD haya fallado. Ambos resultados se loguean por separado.
+    #
+    # En DRY_RUN se omite para garantizar que el modo de prueba sea completamente
+    # no destructivo: no genera datos espurios en reports_database de producción.
+    db_persisted: bool = False
+    if not dry_run:
+        try:
+            report_record: ReportRecord = save_report(
+                store_id=store.store_id,
+                pdf_bytes=pdf_bytes,
+                period_from=stats.date_range_start,
+                period_to=stats.date_range_end,
+            )
+            db_persisted = True
+            logger.info(
+                f"  💾 {store_label}: Reporte persistido en Neon "
+                f"(report_id={report_record.report_id}, "
+                f"{report_record.file_size_kb} KB)."
+            )
+        except Exception as exc:
+            # Fallo no bloqueante: se loguea con severidad error pero el
+            # pipeline continúa hacia el envío SMTP para no dejar al tendero
+            # sin su reporte semanal por un problema de persistencia en BD.
+            logger.error(
+                f"  ❌ {store_label}: Fallo al persistir en Neon: {exc}. "
+                "El envío por correo continuará de todas formas."
+            )
+
+    # ── Paso F: Enviar correo (o simular en DRY_RUN) ──────────────────────────
     if dry_run:
         logger.info(
-            f"  🧪 [DRY_RUN] Envío simulado para {store.email} — "
-            f"PDF generado correctamente ({len(pdf_bytes) / 1024:.1f} KB). "
-            "No se realizó ninguna conexión SMTP."
+            f"  🧪 [DRY_RUN] PDF generado correctamente "
+            f"({len(pdf_bytes) / 1024:.1f} KB). "
+            "Persistencia en Neon y envío SMTP omitidos."
         )
         return True
 
@@ -205,10 +247,20 @@ def _process_store(
             f"  ❌ {store_label}: El envío del correo falló. "
             "Verifique las credenciales SMTP en los secrets de GitHub Actions."
         )
+        # Si el correo falló pero el PDF sí se persistió en Neon, el equipo de
+        # API aún puede servir el reporte al cliente local. No es un fallo total.
+        if db_persisted:
+            logger.warning(
+                f"  ⚠️  {store_label}: El reporte está disponible en Neon "
+                f"aunque el correo no fue entregado. "
+                "El cliente local podrá descargarlo vía API."
+            )
+            return True  # Éxito parcial: BD persistida, correo fallido
         return False
 
     logger.info(
-        f"  🏆 {store_label}: Pipeline completado exitosamente. "
+        f"  🏆 {store_label}: Pipeline completado exitosamente — "
+        f"PDF persistido en Neon ✓ | Correo enviado a {store.email} ✓ "
         f"({stats.unique_products} productos, "
         f"{stats.unique_featured_products} alertas prioritarias)"
     )
@@ -287,7 +339,7 @@ def main() -> None:
     logger.info(f"  🔗  Servidor SMTP             : {_settings.smtp_host}:{_settings.smtp_port}")
     logger.info(_SEP)
 
-    # Paso 1: Verificación de conexión a Neon
+    # ── Paso 1: Verificación de conexión a Neon ───────────────────────────────
     if not verify_connection():
         logger.critical(
             "❌ Sin conexión a la base de datos Neon. "
@@ -296,7 +348,23 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # Paso 2: Obtención de tiendas activas
+    # ── Paso 1.5: Creación idempotente de reports_database ────────────────────
+    # Se ejecuta siempre, incluso en DRY_RUN, porque la existencia de la tabla
+    # es un prerequisito de infraestructura independiente del modo de ejecución.
+    # Si la tabla ya existe, CREATE TABLE IF NOT EXISTS es una no-operación.
+    # Si falla (permisos insuficientes, error DDL en Neon), el worker aborta
+    # antes de intentar procesar tiendas, evitando errores confusos más adelante.
+    try:
+        ensure_reports_table_exists()
+    except Exception as exc:
+        logger.critical(
+            f"❌ No se pudo verificar/crear reports_database en Neon: {exc}. "
+            "Verifique que el usuario de DATABASE_URL tiene permisos DDL "
+            "(CREATE TABLE, CREATE INDEX) en el esquema público."
+        )
+        sys.exit(1)
+
+    # ── Paso 2: Obtención de tiendas activas ──────────────────────────────────
     stores: list[StoreRecord] = get_all_active_stores()
 
     if not stores:
@@ -311,7 +379,7 @@ def main() -> None:
         f"📋 Procesando {len(stores)} tienda(s) activa(s) con email registrado..."
     )
 
-    # Paso 3: Pipeline por tienda
+    # ── Paso 3: Pipeline por tienda ───────────────────────────────────────────
     results: dict[int, bool] = {}
 
     for i, store in enumerate(stores, 1):
@@ -340,7 +408,7 @@ def main() -> None:
             )
             results[store.store_id] = False
 
-    # Paso 4: Resumen del run
+    # ── Paso 4: Resumen del run ───────────────────────────────────────────────
     end_time = datetime.now(timezone.utc)
     _print_run_summary(
         stores=stores,
@@ -350,7 +418,7 @@ def main() -> None:
         dry_run=dry_run,
     )
 
-    # Paso 5: Código de salida
+    # ── Paso 5: Código de salida ──────────────────────────────────────────────
     successful_count = sum(1 for ok in results.values() if ok)
 
     if successful_count == 0 and len(results) > 0:
@@ -365,4 +433,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
