@@ -65,10 +65,10 @@ from db.db_queries import (
     save_report,
     verify_connection,
 )
-from logger import get_logger
-from mailer import send_report
-from renderer import render_report_pdf
-from settings import get_settings
+from utils.logger import get_logger
+from services.mailer import send_report
+from services.renderer import render_report_pdf
+from config.settings import get_settings
 
 logger = get_logger(__name__)
 _settings = get_settings()
