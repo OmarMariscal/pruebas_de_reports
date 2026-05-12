@@ -53,7 +53,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from db_queries import (
+from db.db_queries import (
     ReportRecord,
     StoreRecord,
     WeeklyStats,
