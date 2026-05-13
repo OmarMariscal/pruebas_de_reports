@@ -16,7 +16,7 @@ Responsabilidades:
 
 ─── Estructura de prediction_database (campos consultados) ───────────────────
   store_id, barcode, product_name, category, image_url,
-  objetive_date, prediction, feature, type, percentage_average_deviation
+  objective_date, prediction, feature, type, percentage_average_deviation
 
   Los campos product_name, category e image_url están desnormalizados en la
   tabla de predicciones (decisión de diseño del worker_ml), por lo que este
@@ -131,7 +131,7 @@ class PredictionRow:
     barcode: str
     product_name: str
     category: str
-    objetive_date: date
+    objective_date: date
     prediction: int                       # Unidades enteras predichas
     feature: bool                         # True = producto destacado (RF-05)
     prediction_type: str                  # "superavit" | "deficit" | "none"
@@ -264,7 +264,7 @@ def get_upcoming_predictions(store_id: int, days: int = 7) -> list[PredictionRow
     """
     Obtiene todas las predicciones de los próximos N días para una tienda.
 
-    La cláusula objetive_date >= CURRENT_DATE garantiza que solo se incluyen
+    La cláusula objective_date >= CURRENT_DATE garantiza que solo se incluyen
     predicciones futuras, no datos históricos residuales. La ordenación
     prioriza productos destacados y luego por magnitud de desviación,
     lo que facilita la construcción de la sección de alertas prioritarias.
@@ -285,19 +285,19 @@ def get_upcoming_predictions(store_id: int, days: int = 7) -> list[PredictionRow
             barcode,
             COALESCE(product_name, 'Producto Desconocido') AS product_name,
             COALESCE(category, 'Sin categoría')            AS category,
-            objetive_date,
+            objective_date,
             prediction,
             feature,
             type,
             percentage_average_deviation
         FROM prediction_database
         WHERE store_id   = :store_id
-          AND objetive_date >= :today
-          AND objetive_date <= :end_date
+          AND objective_date >= :today
+          AND objective_date <= :end_date
         ORDER BY
             feature DESC,
             ABS(percentage_average_deviation) DESC,
-            objetive_date ASC
+            objective_date ASC
     """)
 
     predictions: list[PredictionRow] = []
@@ -314,7 +314,7 @@ def get_upcoming_predictions(store_id: int, days: int = 7) -> list[PredictionRow
             barcode=str(row[0]),
             product_name=str(row[1]),
             category=str(row[2]),
-            objetive_date=row[3],
+            objective_date=row[3],
             prediction=int(row[4]),
             feature=bool(row[5]),
             prediction_type=str(row[6]),
@@ -414,7 +414,7 @@ def compute_weekly_stats(
     superavit_products = sum(1 for r in summary_rows if r.prediction_type == "superavit")
     neutral_products = sum(1 for r in summary_rows if r.prediction_type == "none")
 
-    dates = [r.objetive_date for r in predictions]
+    dates = [r.objective_date for r in predictions]
 
     # Alertas prioritarias: feature=True, ordenadas por |desviación| DESC
     featured_list: list[PredictionRow] = sorted(
