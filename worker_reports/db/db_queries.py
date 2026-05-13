@@ -59,7 +59,7 @@ from config.settings import get_settings
 logger = get_logger(__name__)
 _settings = get_settings()
 
-# ── Motor de base de datos ──────────────────────────────────────────────────
+#  Motor de base de datos 
 
 # NullPool: Neon es serverless. Conexiones persistentes se cobran y pueden
 # agotarse. NullPool abre y cierra una conexión por operación, perfecta para
@@ -71,7 +71,7 @@ _engine = create_engine(
 )
 _LocalSession = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
 
-# ── Política de retención de reportes ────────────────────────────────────────
+#  Política de retención de reportes 
 
 # Número máximo de reportes a conservar por tienda en reports_database.
 #
@@ -108,7 +108,7 @@ def get_session() -> Generator[Session, None, None]:
         session.close()
 
 
-# ── Estructuras de datos tipadas ─────────────────────────────────────────────
+#  Estructuras de datos tipadas 
 
 @dataclass(frozen=True)
 class StoreRecord:
@@ -183,7 +183,7 @@ class CategoryStats:
     featured_count: int
 
 
-# ── Dataclass para metadatos de reporte almacenado ──────────────────────────
+#  Dataclass para metadatos de reporte almacenado 
 
 @dataclass(frozen=True)
 class ReportRecord:
@@ -203,7 +203,7 @@ class ReportRecord:
     file_size_kb: int
 
 
-# ── Consultas a la base de datos ─────────────────────────────────────────────
+#  Consultas a la base de datos 
 
 
 def verify_connection() -> bool:
@@ -260,7 +260,7 @@ def get_all_active_stores() -> list[StoreRecord]:
     return records
 
 
-def get_upcoming_predictions(store_id: int, days: int = 7) -> list[PredictionRow]:
+def get_upcoming_predictions(store_id: int, days: int = _settings.report_days) -> list[PredictionRow]:
     """
     Obtiene todas las predicciones de los próximos N días para una tienda.
 
@@ -278,7 +278,7 @@ def get_upcoming_predictions(store_id: int, days: int = 7) -> list[PredictionRow
         Puede ser vacía si el worker_ml no generó predicciones aún.
     """
     today = date.today()
-    end_date = today + timedelta(days=days)
+    end_date = today + timedelta(days=_settings.report_days)
 
     query = text("""
         SELECT
@@ -323,12 +323,12 @@ def get_upcoming_predictions(store_id: int, days: int = 7) -> list[PredictionRow
 
     logger.debug(
         f"  Tienda {store_id}: {len(predictions)} filas de predicción "
-        f"(próximos {days} días, desde {today} hasta {end_date})"
+        f"(próximos {_settings.report_days} días, desde {today} hasta {end_date})"
     )
     return predictions
 
 
-# ── Funciones de agregación puras ────────────────────────────────────────────
+#  Funciones de agregación puras 
 
 def _get_summary_rows(predictions: list[PredictionRow]) -> list[PredictionRow]:
     """
@@ -392,7 +392,7 @@ def compute_weekly_stats(
             superavit_products=0,
             neutral_products=0,
             date_range_start=today,
-            date_range_end=today + timedelta(days=7),
+            date_range_end=today + timedelta(days=_settings.report_days),
             summary_rows=[],
             featured_rows_list=[],
         )
@@ -500,7 +500,7 @@ def compute_category_breakdown(predictions: list[PredictionRow]) -> list[Categor
     return sorted(result, key=lambda c: c.total_products, reverse=True)
 
 
-# ── Gestión del ciclo de vida de reports_database ────────────────────────────
+#  Gestión del ciclo de vida de reports_database 
 
 def ensure_reports_table_exists() -> None:
     """
@@ -612,7 +612,7 @@ def save_report(
     file_size_kb = max(1, len(pdf_bytes) // 1024)
     now_utc = datetime.now(timezone.utc)
 
-    # ── INSERT: nuevo reporte ─────────────────────────────────────────────────
+    #  INSERT: nuevo reporte 
     # RETURNING report_id permite recuperar el ID asignado por BIGSERIAL
     # en la misma sentencia, sin necesidad de un SELECT adicional posterior.
     insert_query = text("""
@@ -623,7 +623,7 @@ def save_report(
         RETURNING report_id
     """)
 
-    # ── DELETE: política de retención ─────────────────────────────────────────
+    #  DELETE: política de retención 
     # Subconsulta:
     #   1. Selecciona los report_id de esta tienda, ordenados del más reciente
     #      al más antiguo.
@@ -667,7 +667,7 @@ def save_report(
         })
         deleted_count: int = delete_result.rowcount
 
-    # ── Log detallado ─────────────────────────────────────────────────────────
+    #  Log detallado 
     period_label = (
         f"{period_from.strftime('%d/%m/%Y')} → {period_to.strftime('%d/%m/%Y')}"
     )

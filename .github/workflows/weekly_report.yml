@@ -96,11 +96,11 @@ jobs:
         working-directory: ./worker_reports
 
     steps:
-      # ── 1. Checkout del repositorio ──────────────────────────────────────────
+      # 1. Checkout del repositorio
       - name: 📥 Checkout del repositorio
         uses: actions/checkout@v4
 
-      # ── 2. Dependencias del sistema para WeasyPrint ───────────────────────────
+      # 2. Dependencias del sistema para WeasyPrint
       # WeasyPrint no es una librería Python pura: depende de libpango para el
       # renderizado de texto y libgdk-pixbuf para el manejo de imágenes.
       # Sin este step, WeasyPrint falla en la importación con:
@@ -119,7 +119,7 @@ jobs:
         # fonts-liberation y fonts-dejavu-core garantizan que WeasyPrint tenga
         # fuentes del sistema disponibles como fallback si Google Fonts no carga.
 
-      # ── 3. Configurar Python 3.11 ─────────────────────────────────────────────
+      #  3. Configurar Python 3.11 
       - name: 🐍 Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -127,13 +127,13 @@ jobs:
           cache: "pip"
           cache-dependency-path: worker_reports/requirements.txt
 
-      # ── 4. Instalar dependencias Python ───────────────────────────────────────
+      #  4. Instalar dependencias Python 
       - name: 📦 Instalar dependencias Python
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ── 5. Verificar instalación de WeasyPrint ────────────────────────────────
+      #  5. Verificar instalación de WeasyPrint 
       # Step de diagnóstico temprano: si WeasyPrint no puede importarse correctamente
       # (falta de dependencias del sistema), este step fallará con un mensaje claro
       # antes de intentar el pipeline principal.
@@ -146,26 +146,26 @@ jobs:
           print('✅ Renderizador HTML disponible.')
           "
 
-      # ── 6. Ejecutar Worker Reports ────────────────────────────────────────────
+      #  6. Ejecutar Worker Reports 
       - name: 📊 Ejecutar Worker Reports
         env:
-          # ── Secrets de base de datos ──────────────────────────────────────────
+          #  Secrets de base de datos 
           DATABASE_URL:    ${{ secrets.DATABASE_URL }}
 
-          # ── Secrets SMTP ──────────────────────────────────────────────────────
+          #  Secrets SMTP 
           SMTP_HOST:       ${{ secrets.SMTP_HOST }}
           SMTP_PORT:       ${{ secrets.SMTP_PORT }}
           SMTP_USER:       ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD:   ${{ secrets.SMTP_PASSWORD }}
 
-          # ── Variables de configuración (con defaults sensatos) ────────────────
+          #  Variables de configuración (con defaults sensatos) 
           SMTP_FROM:       ${{ vars.SMTP_FROM      || 'reportes@bananalytics.com' }}
           SMTP_FROM_NAME:  ${{ vars.SMTP_FROM_NAME || 'BanAnalytics Reportes' }}
           SMTP_USE_TLS:    ${{ vars.SMTP_USE_TLS   || 'true' }}
           REPORT_DAYS:     ${{ vars.REPORT_DAYS    || '7' }}
           MAX_FEATURED:    ${{ vars.MAX_FEATURED   || '10' }}
 
-          # ── Modo prueba (workflow_dispatch únicamente) ────────────────────────
+          #  Modo prueba (workflow_dispatch únicamente) 
           # DRY_RUN=true activa el modo completamente no destructivo:
           #   · El pipeline de generación del PDF (pasos A–E) se ejecuta íntegro.
           #   · El paso E2 (INSERT en reports_database) se OMITE.
@@ -175,7 +175,7 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python main.py
 
-      # ── 7. Resumen del run ────────────────────────────────────────────────────
+      #  7. Resumen del run 
       # Se ejecuta siempre (incluso si el step anterior falla) para proveer
       # contexto en los logs de GitHub Actions.
       - name: 📋 Resumen del run

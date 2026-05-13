@@ -5,7 +5,7 @@ Replica el pipeline exacto de producción (main.py) para UNA tienda específica,
 con control granular sobre cada paso: persistencia en Neon, envío SMTP y
 guardado en disco del PDF, todos activables de forma independiente.
 
-─── MODOS DE USO ─────────────────────────────────────────────────────────────
+ MODOS DE USO 
 
   # 1. Ver qué tiendas existen en la base de datos:
   python test_single_report.py --list-stores
@@ -25,7 +25,7 @@ guardado en disco del PDF, todos activables de forma independiente.
   # 6. Pipeline completo identico a produccion:
   python test_single_report.py --store-id 1 --to yo@gmail.com --persist-db --save-pdf
 
-─── COMPORTAMIENTO POR DEFECTO ───────────────────────────────────────────────
+ COMPORTAMIENTO POR DEFECTO 
 
   · --persist-db está DESACTIVADO por defecto. Debes activarlo explícitamente
     para escribir en reports_database. Esto protege Neon de datos de prueba
@@ -35,7 +35,7 @@ guardado en disco del PDF, todos activables de forma independiente.
     tienda en stores_database. Con él, se sobreescribe el destinatario para
     esa ejecución sin modificar la BD.
 
-─── REQUISITOS ───────────────────────────────────────────────────────────────
+ REQUISITOS 
 
   · Archivo .env en worker_reports/ con DATABASE_URL y credenciales SMTP.
     (SMTP solo requerido si se usa --to o el email registrado de la tienda).
@@ -51,7 +51,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-# ── Garantiza que los módulos del worker se encuentran en el path ─────────────
+#  Garantiza que los módulos del worker se encuentran en el path 
 # Necesario al ejecutar el script desde cualquier directorio que no sea
 # worker_reports/. El insert en índice 0 da prioridad a los módulos locales
 # sobre cualquier paquete instalado con el mismo nombre.
@@ -81,9 +81,9 @@ def _format_timestamp(dt: datetime) -> str:
     return dt.strftime("%d/%m/%Y %H:%M UTC")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # COMANDO: --list-stores
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def cmd_list_stores() -> None:
     """
@@ -107,16 +107,16 @@ def cmd_list_stores() -> None:
 
     print("\n" + _SEP)
     print(f"  {'ID':>4}  {'Propietario':<26}  {'Ciudad':<16}  Email")
-    print("─" * 62)
+    print("" * 62)
     for s in stores:
         print(f"  {s.store_id:>4}  {s.owner_name:<26}  {s.city:<16}  {s.email}")
     print(_SEP)
     print(f"  Total: {len(stores)} tienda(s)\n")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # COMANDO: --list-reports
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def cmd_list_reports(store_id: int) -> None:
     """
@@ -182,7 +182,7 @@ def cmd_list_reports(store_id: int) -> None:
         f"  {'ID':>10}  {'Creado (UTC)':<20}  "
         f"{'Período cubierto':<26}  Tamaño"
     )
-    print("─" * 62)
+    print("" * 62)
 
     for row in rows:
         report_id, created_at, period_from, period_to, size_kb = row
@@ -199,9 +199,9 @@ def cmd_list_reports(store_id: int) -> None:
     print(_SEP + "\n")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # COMANDO PRINCIPAL: pipeline de generación
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def cmd_run_pipeline(
     store_id:       int,
@@ -235,14 +235,14 @@ def cmd_run_pipeline(
     logger.info(f"💾 Persistir en Neon : {'SI' if persist_db else 'NO (--persist-db para activar)'}")
     logger.info(f"📧 Enviar correo     : {'SI → ' + override_email if override_email else 'Al email de la tienda'}")
     logger.info(f"🖨  Guardar PDF       : {'SI' if save_pdf else 'NO'}")
-    print("─" * 62 + "\n")
+    print("" * 62 + "\n")
 
-    # ── Paso 0: Verificar conexión ────────────────────────────────────────────
+    #  Paso 0: Verificar conexión 
     if not verify_connection():
         logger.error("❌ Sin conexión a Neon. Verifica DATABASE_URL en .env")
         sys.exit(1)
 
-    # ── Paso 0.5: Crear tabla si persist_db está activo ───────────────────────
+    #  Paso 0.5: Crear tabla si persist_db está activo 
     if persist_db:
         try:
             ensure_reports_table_exists()
@@ -253,7 +253,7 @@ def cmd_run_pipeline(
             )
             sys.exit(1)
 
-    # ── Paso A: Buscar la tienda ──────────────────────────────────────────────
+    #  Paso A: Buscar la tienda 
     all_stores = get_all_active_stores()
     store: StoreRecord | None = next(
         (s for s in all_stores if s.store_id == store_id), None
@@ -277,7 +277,7 @@ def cmd_run_pipeline(
         store = replace(store, email=override_email)
         logger.info(f"📧 Email sobreescrito para esta prueba: {store.email}")
 
-    # ── Paso B: Consultar predicciones ────────────────────────────────────────
+    #  Paso B: Consultar predicciones 
     logger.info(
         f"🔍 Consultando predicciones "
         f"(próximos {_settings.report_days} días)..."
@@ -299,7 +299,7 @@ def cmd_run_pipeline(
 
     logger.info(f"✅ {len(predictions)} filas de predicción encontradas.")
 
-    # ── Pasos C+D: Calcular estadísticas ──────────────────────────────────────
+    #  Pasos C+D: Calcular estadísticas 
     logger.info("📊 Calculando métricas y breakdown por categoría...")
     stats = compute_weekly_stats(
         predictions=predictions,
@@ -318,7 +318,7 @@ def cmd_run_pipeline(
         f"   Categorías          : {len(category_breakdown)}"
     )
 
-    # ── Paso E: Renderizar PDF en memoria ─────────────────────────────────────
+    #  Paso E: Renderizar PDF en memoria 
     logger.info("🖨  Renderizando PDF con WeasyPrint...")
     try:
         pdf_bytes = render_report_pdf(
@@ -342,7 +342,7 @@ def cmd_run_pipeline(
     pdf_kb = len(pdf_bytes) / 1024
     logger.info(f"✅ PDF generado en memoria: {pdf_kb:.1f} KB")
 
-    # ── Paso E (disco): Guardar PDF localmente ────────────────────────────────
+    #  Paso E (disco): Guardar PDF localmente 
     if save_pdf:
         pdf_filename = (
             f"test_reporte_tienda_{store.store_id}_"
@@ -355,7 +355,7 @@ def cmd_run_pipeline(
             "   Ábrelo con cualquier visor PDF para inspeccionar el diseño."
         )
 
-    # ── Paso E2: Persistir en Neon ────────────────────────────────────────────
+    #  Paso E2: Persistir en Neon 
     # Replica el comportamiento de _process_store() en main.py:
     # un fallo aquí es no bloqueante — el pipeline continúa hacia el correo.
     db_persisted: bool = False
@@ -395,7 +395,7 @@ def cmd_run_pipeline(
             "   Para escribir en Neon, agrega --persist-db al comando."
         )
 
-    # ── Paso F: Enviar correo ─────────────────────────────────────────────────
+    #  Paso F: Enviar correo 
     logger.info(f"\n📧 Enviando correo a {store.email}...")
     try:
         email_sent = send_report_email(
@@ -408,10 +408,10 @@ def cmd_run_pipeline(
         logger.error(f"❌ Excepción inesperada al enviar correo: {exc}")
         email_sent = False
 
-    # ── Resumen final ─────────────────────────────────────────────────────────
+    #  Resumen final 
     print("\n" + _SEP)
     logger.info("📋 RESUMEN DE LA PRUEBA")
-    print("─" * 62)
+    print("" * 62)
 
     # Cada entrada: (nombre del paso, resultado: True/False/None=omitido)
     steps = [
@@ -440,9 +440,9 @@ def cmd_run_pipeline(
         )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # ENTRYPOINT
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -520,7 +520,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # ── Enrutamiento ──────────────────────────────────────────────────────────
+    #  Enrutamiento 
     if args.list_stores:
         cmd_list_stores()
         return
@@ -528,7 +528,7 @@ def main() -> None:
     if args.store_id is None:
         parser.print_help()
         print(
-            f"\n{'─' * 62}\n"
+            f"\n{'' * 62}\n"
             "❌ ERROR: Debes indicar --store-id.\n"
             "   Usa --list-stores para ver los IDs disponibles.\n"
         )

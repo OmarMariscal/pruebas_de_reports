@@ -73,7 +73,7 @@ from config.settings import get_settings
 logger = get_logger(__name__)
 _settings = get_settings()
 
-# ── Separador visual para los logs de GitHub Actions ─────────────────────────
+#  Separador visual para los logs de GitHub Actions 
 
 _SEP = "═" * 68
 
@@ -137,7 +137,7 @@ def _process_store(
     """
     store_label = f"Tienda {store.store_id} ({store.owner_name}, {store.city})"
 
-    # ── Paso A: Consultar predicciones ────────────────────────────────────────
+    #  Paso A: Consultar predicciones 
     try:
         predictions = get_upcoming_predictions(
             store_id=store.store_id,
@@ -147,7 +147,7 @@ def _process_store(
         logger.error(f"  ❌ {store_label}: Error al consultar predicciones: {exc}")
         return False
 
-    # ── Paso B: Validar datos mínimos ─────────────────────────────────────────
+    #  Paso B: Validar datos mínimos 
     if not predictions:
         logger.warning(
             f"  ⚠️  {store_label}: Sin predicciones disponibles para los "
@@ -157,7 +157,7 @@ def _process_store(
         )
         return False
 
-    # ── Paso C: Calcular métricas agregadas ───────────────────────────────────
+    #  Paso C: Calcular métricas agregadas 
     try:
         stats: WeeklyStats = compute_weekly_stats(
             predictions=predictions,
@@ -167,7 +167,7 @@ def _process_store(
         logger.error(f"  ❌ {store_label}: Error al calcular estadísticas: {exc}")
         return False
 
-    # ── Paso D: Calcular breakdown por categoría ──────────────────────────────
+    #  Paso D: Calcular breakdown por categoría 
     try:
         category_breakdown = compute_category_breakdown(predictions)
     except Exception as exc:
@@ -176,7 +176,7 @@ def _process_store(
         )
         return False
 
-    # ── Paso E: Renderizar PDF en memoria ─────────────────────────────────────
+    #  Paso E: Renderizar PDF en memoria 
     try:
         pdf_bytes = render_report_pdf(
             store=store,
@@ -195,7 +195,7 @@ def _process_store(
         logger.error(f"  ❌ {store_label}: Error al renderizar PDF: {exc}")
         return False
 
-    # ── Paso E2: Persistir PDF en Neon (omitido en DRY_RUN) ─────────────────────
+    #  Paso E2: Persistir PDF en Neon (omitido en DRY_RUN) 
     # Este paso es independiente del paso F (envío SMTP): un fallo aquí
     # no impide el envío del correo. El tendero recibe su reporte aunque
     # la escritura en BD haya fallado. Ambos resultados se loguean por separado.
@@ -226,7 +226,7 @@ def _process_store(
                 "El envío por correo continuará de todas formas."
             )
 
-    # ── Paso F: Enviar correo (o simular en DRY_RUN) ──────────────────────────
+    #  Paso F: Enviar correo (o simular en DRY_RUN) 
     if dry_run:
         logger.info(
             f"  🧪 [DRY_RUN] PDF generado correctamente "
@@ -339,7 +339,7 @@ def main() -> None:
     logger.info(f"  🔗  Servidor SMTP             : {_settings.smtp_host}:{_settings.smtp_port}")
     logger.info(_SEP)
 
-    # ── Paso 1: Verificación de conexión a Neon ───────────────────────────────
+    #  Paso 1: Verificación de conexión a Neon 
     if not verify_connection():
         logger.critical(
             "❌ Sin conexión a la base de datos Neon. "
@@ -348,7 +348,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # ── Paso 1.5: Creación idempotente de reports_database ────────────────────
+    #  Paso 1.5: Creación idempotente de reports_database 
     # Se ejecuta siempre, incluso en DRY_RUN, porque la existencia de la tabla
     # es un prerequisito de infraestructura independiente del modo de ejecución.
     # Si la tabla ya existe, CREATE TABLE IF NOT EXISTS es una no-operación.
@@ -364,7 +364,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # ── Paso 2: Obtención de tiendas activas ──────────────────────────────────
+    #  Paso 2: Obtención de tiendas activas 
     stores: list[StoreRecord] = get_all_active_stores()
 
     if not stores:
@@ -379,7 +379,7 @@ def main() -> None:
         f"📋 Procesando {len(stores)} tienda(s) activa(s) con email registrado..."
     )
 
-    # ── Paso 3: Pipeline por tienda ───────────────────────────────────────────
+    #  Paso 3: Pipeline por tienda 
     results: dict[int, bool] = {}
 
     for i, store in enumerate(stores, 1):
@@ -408,7 +408,7 @@ def main() -> None:
             )
             results[store.store_id] = False
 
-    # ── Paso 4: Resumen del run ───────────────────────────────────────────────
+    #  Paso 4: Resumen del run 
     end_time = datetime.now(timezone.utc)
     _print_run_summary(
         stores=stores,
@@ -418,7 +418,7 @@ def main() -> None:
         dry_run=dry_run,
     )
 
-    # ── Paso 5: Código de salida ──────────────────────────────────────────────
+    #  Paso 5: Código de salida 
     successful_count = sum(1 for ok in results.values() if ok)
 
     if successful_count == 0 and len(results) > 0:
